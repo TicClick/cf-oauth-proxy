@@ -1,5 +1,8 @@
+shadow!(shadow);
+
 use http::StatusCode;
 use rand::Rng;
+use shadow_rs::shadow;
 use worker::*;
 
 use crate::{
@@ -157,6 +160,20 @@ async fn handle_oauth_callback(req: HttpRequest, env: &Env) -> Result<Response> 
     }
 }
 
+fn serve_index() -> Result<Response> {
+    let response = format!(
+        r#"
+OK <br/>
+<br />
+<a href="https://github.com/TicClick/cf-oauth-proxy">{}</a> built from rev {}@{}<br />
+"#,
+        shadow::PROJECT_NAME,
+        shadow::SHORT_COMMIT,
+        shadow::BRANCH,
+    );
+    Response::from_html(response).map(|r| r.with_status(StatusCode::OK.into()))
+}
+
 #[event(fetch)]
 async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<Response> {
     let config = OAuthConfig::from_env(&env)?;
@@ -165,7 +182,7 @@ async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<Response> {
         &http::Method::GET => {
             let path = req.uri().path();
             if path == "/" {
-                Response::ok("OK").map(|r| r.with_status(StatusCode::OK.into()))
+                serve_index()
             } else if path == config.oauth_init_uri_suffix {
                 handle_oauth_start(req, &env).await
             } else if path == config.redirect_uri_suffix {
