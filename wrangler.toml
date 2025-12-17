@@ -8,6 +8,7 @@ command = "cargo install -q worker-build@^0.7.1 && worker-build --release"
 [vars]
 OAUTH_CLIENT_ID = "32234"
 # OAUTH_CLIENT_SECRET must be set manually in the Cloudflare CI interface.
-OAUTH_REDIRECT_URI = "https://cf-oauth-proxy.ya-6b9.workers.dev/oauth/callback"
+OAUTH_INIT_URI_SUFFIX = "/steel/oauth"
+OAUTH_REDIRECT_URI_SUFFIX = "/steel/oauth/callback"
 OAUTH_AUTHORIZATION_URL = "https://osu.ppy.sh/oauth/authorize"
 OAUTH_TOKEN_URL = "https://osu.ppy.sh/oauth/token"

@@ -4,7 +4,7 @@ use worker::*;
 
 use crate::{
     config::OAuthConfig,
-    http_utils::{error_redirect, parse_url, redirect_to, success_redirect},
+    http_utils::{error_redirect, make_redirect_uri, parse_url, success_redirect},
     state::{decode_state, encode_state, StateData},
     token::{TokenErrorResponse, TokenResponse},
 };
@@ -51,16 +51,17 @@ async fn handle_oauth_start(req: HttpRequest, env: &Env) -> Result<Response> {
     let state = encode_state(&state_data)?;
 
     let mut auth_url = parse_url(&config.authorization_url)?;
+    let redirect_uri = make_redirect_uri(&req, &config)?;
 
     auth_url
         .query_pairs_mut()
         .append_pair("client_id", &config.client_id)
-        .append_pair("redirect_uri", &config.redirect_uri)
+        .append_pair("redirect_uri", redirect_uri.as_str())
         .append_pair("response_type", "code")
         .append_pair("state", &state)
         .append_pair("scope", &scopes);
 
-    redirect_to(auth_url.as_str())
+    Response::redirect(auth_url)
 }
 
 async fn handle_oauth_callback(req: HttpRequest, env: &Env) -> Result<Response> {
@@ -105,10 +106,12 @@ async fn handle_oauth_callback(req: HttpRequest, env: &Env) -> Result<Response> 
         None => return error_redirect(local_port, "Missing authorization code"),
     };
 
+    let redirect_uri = make_redirect_uri(&req, &config)?;
+
     let token_params = format!(
         "grant_type=authorization_code&code={}&redirect_uri={}&client_id={}&client_secret={}",
         urlencoding::encode(&code),
-        urlencoding::encode(&config.redirect_uri),
+        urlencoding::encode(redirect_uri.as_str()),
         urlencoding::encode(&config.client_id),
         urlencoding::encode(&config.client_secret)
     );
@@ -156,13 +159,21 @@ async fn handle_oauth_callback(req: HttpRequest, env: &Env) -> Result<Response> 
 
 #[event(fetch)]
 async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<Response> {
-    let path = req.uri().path();
-    let method = req.method();
+    let config = OAuthConfig::from_env(&env)?;
 
-    match (method, path) {
-        (&http::Method::GET, "/oauth") => handle_oauth_start(req, &env).await,
-        (&http::Method::GET, "/oauth/callback") => handle_oauth_callback(req, &env).await,
-        _ => Response::ok("OK")
-            .map(|r| r.with_headers([("Content-Type", "text/html")].iter().collect())),
+    match req.method() {
+        &http::Method::GET => {
+            let path = req.uri().path();
+            if path == "/" {
+                Response::ok("OK").map(|r| r.with_status(StatusCode::OK.into()))
+            } else if path == config.oauth_init_uri_suffix {
+                handle_oauth_start(req, &env).await
+            } else if path == config.redirect_uri_suffix {
+                handle_oauth_callback(req, &env).await
+            } else {
+                Response::error("Not found", StatusCode::NOT_FOUND.into())
+            }
+        }
+        _ => Response::error("Method not allowed", StatusCode::METHOD_NOT_ALLOWED.into()),
     }
 }
