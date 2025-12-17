@@ -20,3 +20,29 @@ sequenceDiagram
 ## Build
 
 https://developers.cloudflare.com/workers/languages/rust/
+
+### Cloudflare
+
+Cloudflare CI doesn't come with Rust or Cargo preinstalled.
+
+Build command:
+
+```sh
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+. "$HOME/.cargo/env"
+cargo install cargo-generate
+```
+
+Deploy command:
+
+```sh
+. "$HOME/.cargo/env"
+npx wrangler deploy
+```
+
+Non-production branch deploy command:
+
+```sh
+. "$HOME/.cargo/env"
+npx wrangler versions upload
+```
