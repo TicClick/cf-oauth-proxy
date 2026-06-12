@@ -7,7 +7,7 @@ use worker::*;
 
 use crate::{
     config::OAuthConfig,
-    http_utils::{error_redirect, make_redirect_uri, parse_url, success_redirect},
+    http_utils::{error_redirect, json_response, make_redirect_uri, parse_url, success_redirect},
     state::{decode_state, encode_state, StateData},
     token::{TokenErrorResponse, TokenResponse},
 };
@@ -160,6 +160,86 @@ async fn handle_oauth_callback(req: HttpRequest, env: &Env) -> Result<Response> 
     }
 }
 
+async fn handle_oauth_refresh(req: HttpRequest, env: &Env) -> Result<Response> {
+    let config = OAuthConfig::from_env(env)?;
+
+    let mut req = Request::try_from(req)?;
+    let body = req.text().await?;
+
+    let refresh_token = url::form_urlencoded::parse(body.as_bytes())
+        .find(|(key, _)| key == "refresh_token")
+        .map(|(_, value)| value.to_string());
+
+    let refresh_token = match refresh_token {
+        Some(token) if !token.is_empty() => token,
+        _ => {
+            let error = TokenErrorResponse {
+                error: "invalid_request".to_string(),
+                error_description: Some("Missing refresh_token parameter".to_string()),
+            };
+            return json_response(
+                serde_json::to_string(&error).map_err(|e| Error::RustError(e.to_string()))?,
+                StatusCode::BAD_REQUEST.into(),
+            );
+        }
+    };
+
+    let token_params = format!(
+        "grant_type=refresh_token&refresh_token={}&client_id={}&client_secret={}",
+        urlencoding::encode(&refresh_token),
+        urlencoding::encode(&config.client_id),
+        urlencoding::encode(&config.client_secret)
+    );
+
+    let token_request = Request::new_with_init(
+        &config.token_url,
+        RequestInit::new()
+            .with_method(Method::Post)
+            .with_body(Some(token_params.into()))
+            .with_headers({
+                let headers = Headers::new();
+                headers.set("Content-Type", "application/x-www-form-urlencoded")?;
+                headers
+            }),
+    )?;
+
+    let mut token_response = Fetch::Request(token_request).send().await?;
+
+    let status = token_response.status_code();
+    let body_text = token_response.text().await?;
+
+    if (200..300).contains(&status) {
+        match serde_json::from_str::<TokenResponse>(&body_text) {
+            Ok(_) => json_response(body_text, StatusCode::OK.into()),
+            Err(e) => {
+                let error = TokenErrorResponse {
+                    error: "invalid_upstream_response".to_string(),
+                    error_description: Some(format!("Failed to parse token response: {}", e)),
+                };
+                json_response(
+                    serde_json::to_string(&error).map_err(|e| Error::RustError(e.to_string()))?,
+                    StatusCode::BAD_GATEWAY.into(),
+                )
+            }
+        }
+    } else {
+        let body_text = match serde_json::from_str::<TokenErrorResponse>(&body_text) {
+            Ok(_) => body_text,
+            Err(_) => {
+                let error = TokenErrorResponse {
+                    error: "upstream_error".to_string(),
+                    error_description: Some(format!(
+                        "Token refresh failed with status {}: {}",
+                        status, body_text
+                    )),
+                };
+                serde_json::to_string(&error).map_err(|e| Error::RustError(e.to_string()))?
+            }
+        };
+        json_response(body_text, status)
+    }
+}
+
 fn serve_index() -> Result<Response> {
     let response = format!(
         r#"
@@ -178,15 +258,22 @@ OK <br/>
 async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<Response> {
     let config = OAuthConfig::from_env(&env)?;
 
-    match req.method() {
-        &http::Method::GET => {
-            let path = req.uri().path();
+    let path = req.uri().path().to_owned();
+    match *req.method() {
+        http::Method::GET => {
             if path == "/" {
                 serve_index()
             } else if path == config.oauth_init_uri_suffix {
                 handle_oauth_start(req, &env).await
             } else if path == config.redirect_uri_suffix {
                 handle_oauth_callback(req, &env).await
+            } else {
+                Response::error("Not found", StatusCode::NOT_FOUND.into())
+            }
+        }
+        http::Method::POST => {
+            if path == config.refresh_uri_suffix {
+                handle_oauth_refresh(req, &env).await
             } else {
                 Response::error("Not found", StatusCode::NOT_FOUND.into())
             }

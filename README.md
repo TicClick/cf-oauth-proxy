@@ -2,6 +2,8 @@
 
 cf-oauth-proxy is a Cloudflare Worker proxy for concealing `client_secret` of your web app, while letting users get access and refresh tokens through it.
 
+## Authentication
+
 ```mermaid
 sequenceDiagram
     participant localhost
@@ -17,6 +19,20 @@ sequenceDiagram
     proxy-->>-localhost: Redirect to local_port with tokens
 ```
 
+## Token refresh
+
+```mermaid
+sequenceDiagram
+    participant app
+    participant proxy as cf-oauth-proxy
+    participant server as OAuth server
+
+    app->>+proxy: POST /oauth/refresh (refresh_token)
+    proxy->>+server: POST /oauth/token (grant_type=refresh_token, client_secret)
+    server-->>-proxy: access_token, refresh_token, expires_in
+    proxy-->>-app: JSON with tokens
+```
+
 ## Build
 
 https://developers.cloudflare.com/workers/languages/rust/
@@ -30,7 +46,6 @@ Build command:
 ```sh
 curl https://sh.rustup.rs -sSf | sh -s -- -y
 . "$HOME/.cargo/env"
-cargo install cargo-generate
 ```
 
 Deploy command:

@@ -9,6 +9,8 @@ pub struct OAuthConfig {
     pub oauth_init_uri_suffix: String,
     /// OAuth callback suffix. Example: /steel/oauth/callback
     pub redirect_uri_suffix: String,
+    /// Token refresh suffix. Example: /steel/oauth/refresh
+    pub refresh_uri_suffix: String,
     /// Authorization page URL. Example: https://osu.ppy.sh/oauth/authorize
     pub authorization_url: String,
     /// OAuth token endpoint. Example: https://osu.ppy.sh/oauth/token
@@ -22,6 +24,7 @@ impl OAuthConfig {
             client_secret: env.secret("OAUTH_CLIENT_SECRET")?.to_string(),
             oauth_init_uri_suffix: env.var("OAUTH_INIT_URI_SUFFIX")?.to_string(),
             redirect_uri_suffix: env.var("OAUTH_REDIRECT_URI_SUFFIX")?.to_string(),
+            refresh_uri_suffix: env.var("OAUTH_REFRESH_URI_SUFFIX")?.to_string(),
             authorization_url: env.var("OAUTH_AUTHORIZATION_URL")?.to_string(),
             token_url: env.var("OAUTH_TOKEN_URL")?.to_string(),
         })

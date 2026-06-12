@@ -28,6 +28,12 @@ pub fn make_redirect_uri(req: &HttpRequest, config: &OAuthConfig) -> Result<url:
     url::Url::parse(&url_str).map_err(|e| Error::RustError(e.to_string()))
 }
 
+pub fn json_response(body: String, status: u16) -> Result<Response> {
+    let headers = Headers::new();
+    headers.set("Content-Type", "application/json")?;
+    Ok(Response::ok(body)?.with_status(status).with_headers(headers))
+}
+
 pub fn error_redirect(local_port: u16, error_msg: &str) -> Result<Response> {
     let redirect_url = url::Url::parse(&format!(
         "http://localhost:{}/?status=error&error={}",
