@@ -259,8 +259,8 @@ async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<Response> {
     let config = OAuthConfig::from_env(&env)?;
 
     let path = req.uri().path().to_owned();
-    match req.method() {
-        &http::Method::GET => {
+    match *req.method() {
+        http::Method::GET => {
             if path == "/" {
                 serve_index()
             } else if path == config.oauth_init_uri_suffix {
@@ -271,7 +271,7 @@ async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<Response> {
                 Response::error("Not found", StatusCode::NOT_FOUND.into())
             }
         }
-        &http::Method::POST => {
+        http::Method::POST => {
             if path == config.refresh_uri_suffix {
                 handle_oauth_refresh(req, &env).await
             } else {
