@@ -46,7 +46,6 @@ Build command:
 ```sh
 curl https://sh.rustup.rs -sSf | sh -s -- -y
 . "$HOME/.cargo/env"
-cargo install cargo-generate
 ```
 
 Deploy command:
